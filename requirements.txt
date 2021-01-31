@@ -1,0 +1,7 @@
+python-dotenv
+flask
+flask-sqlalchemy
+flask-restful
+flask-marshmallow
+psycopg2
+flask-jwt-extended
