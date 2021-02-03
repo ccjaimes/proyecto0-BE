@@ -2,6 +2,7 @@ import os
 import enum
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 from flask_restful import Api, Resource
@@ -9,6 +10,7 @@ from datetime import datetime, date
 from flask_jwt_extended import JWTManager
 from flask_jwt_extended import (create_access_token, jwt_required, get_jwt_identity, get_raw_jwt)
 from marshmallow_enum import EnumField
+import hashlib
 
 load_dotenv()
 
@@ -21,6 +23,7 @@ SECRET=os.getenv("SECRET")
 JWTSECRET=os.getenv("JWTSECRET")
 
 app = Flask(__name__)
+CORS(app)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'postgresql://{}:{}@{}:{}/{}'.format(USER, PW, HOST, PORT, DB)
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = SECRET
@@ -46,7 +49,7 @@ class EventoForm(enum.Enum):
 
 class Usuario(db.Model):
     email = db.Column(db.String(100), primary_key=True)
-    pw = db.Column(db.String(50))
+    pw = db.Column(db.String(100))
     eventos = db.relationship('Evento', backref='usuario', lazy=True)
 
 class Evento(db.Model):
@@ -148,10 +151,12 @@ class RecursoDetalleEvento(Resource):
         return '', 204
         
 
-class RecursoListarUsuarios(Resource):
+class RecursoRegistrarUsuarios(Resource):
     def post(self):
         if Usuario.query.filter_by(email=request.json['email']).first() is not None:
             return {'message': 'El correo {} ya está registrado'.format(request.json['email'])}
+        if request.json['email'] == '' or request.json['pw'] == '':
+            return {'message': 'Campos invalidos'}
         nuevo_usuario = Usuario(
             email = request.json['email'],
             pw = request.json['pw']
@@ -167,10 +172,13 @@ class RecursoListarUsuarios(Resource):
             }
         except:
             return {'message':'Ha ocurrido un error'}, 500
-        
     
-    def get(self):
-        usuario = Usuario.query.get_or_404(request.json['email'])
+class RecursoLoginUsuarios(Resource):
+    def post(self):
+        request.get_json(force=True)
+        usuario = Usuario.query.get(request.json['email'])
+        if usuario is None:
+            return {'message':'El email ingresado no está registrado'}
         if usuario.pw != request.json['pw']:
             return {'message': 'Contraseña incorrecta'}
         try:
@@ -181,12 +189,11 @@ class RecursoListarUsuarios(Resource):
             }
         except:
             return {'message':'Ha ocurrido un error'}, 500
-    
-    #TODO: Hacer put para cambiar contraseña
 
 
 api.add_resource(RecursoListarEventos, '/eventos')
-api.add_resource(RecursoListarUsuarios, '/usuarios')
+api.add_resource(RecursoRegistrarUsuarios, '/registrar')
+api.add_resource(RecursoLoginUsuarios, '/login')
 api.add_resource(RecursoDetalleEvento, '/eventos/<int:id_evento>')
 
 if __name__ == '__main__':
